@@ -1,32 +1,34 @@
-using Tweetinvi;
+using TwitterDegensApp.Services;
 
 namespace TwitterDegensApp;
 
 public class Worker : BackgroundService
 {
 	private readonly ILogger<Worker> _logger;
-	private readonly TwitterClient _twitterClient;
+	private readonly IServiceScopeFactory _serviceScopeFactory;
 
-	public Worker(ILogger<Worker> logger, TwitterClient twitterClient)
+	public Worker(ILogger<Worker> logger, IServiceScopeFactory serviceScopeFactory)
 	{
 		_logger = logger;
-		_twitterClient = twitterClient;
+		_serviceScopeFactory = serviceScopeFactory;
 	}
 
-	protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+	protected override async Task ExecuteAsync(CancellationToken ct)
 	{
-		while (!stoppingToken.IsCancellationRequested)
+		using var serviceScope = _serviceScopeFactory.CreateScope();
+		var twitterService = serviceScope.ServiceProvider.GetService<ITwitterService>();
+		ArgumentNullException.ThrowIfNull(twitterService);
+		
+		await twitterService.UpsertCurrentUser(ct);
+		
+		while (!ct.IsCancellationRequested)
 		{
 			if (_logger.IsEnabled(LogLevel.Information))
 			{
 				_logger.LogInformation("Worker running at: {time}", DateTimeOffset.Now);
 			}
-			
-			var user = await _twitterClient.Users.GetAuthenticatedUserAsync();
-			
-			_logger.LogInformation(user.Name);
 
-			await Task.Delay(1000, stoppingToken);
+			await Task.Delay(1000, ct);
 		}
 	}
 }
